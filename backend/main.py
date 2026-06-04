@@ -41,6 +41,7 @@ ALLOWED_ORIGINS = list({
     *(o.strip() for o in os.getenv("FRONTEND_URL", "").split(",") if o.strip()),
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://aios-mu.vercel.app",
 })
 
 app.add_middleware(
