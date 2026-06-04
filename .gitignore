@@ -1,0 +1,36 @@
+# ── Secrets & environnement ──
+.env
+.env.local
+*.env
+!.env.example
+
+# ── Python ──
+backend/venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# ── Node / Next.js ──
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+next-env.d.ts
+
+# ── Uploads & données locales ──
+backend/uploads/
+uploads/
+
+# ── Checkpoints LangGraph (état des graphes en pause) ──
+*.db
+*.db-wal
+*.db-shm
+
+# ── OS / éditeurs ──
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Artefacts d'installation cassés ──
+{backend/
