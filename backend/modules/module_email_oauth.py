@@ -62,18 +62,52 @@ from core.orchestrateur import generer_texte_juridique, get_embedding
 import httpx
 
 # ── Chiffrement des tokens (AES-256 via Fernet) ───────────────────────
+# On CHIFFRE avec la clé primaire (SECRET_KEY, sinon FERNET_KEY, sinon l'ancien défaut).
+# On DÉCHIFFRE en essayant TOUTES les clés candidates → compatible avec un token chiffré
+# sous une autre clé (migration local↔Render, bascule SECRET_KEY/FERNET_KEY, ancien défaut).
+# Évite de devoir reconnecter Gmail à chaque changement de clé.
+
+_DEFAUT_SECRET = "changez_cette_cle_secrete_en_production"
+
+
+def _cle_primaire() -> str:
+    """Clé utilisée pour CHIFFRER les nouveaux tokens (ordre de préférence)."""
+    return os.getenv("SECRET_KEY") or os.getenv("FERNET_KEY") or _DEFAUT_SECRET
+
+
+def _cles_candidates() -> list[str]:
+    """Clés à essayer pour DÉCHIFFRER un token existant (compat clés historiques)."""
+    vues, candidates = set(), []
+    for v in (os.getenv("SECRET_KEY"), os.getenv("FERNET_KEY"), _DEFAUT_SECRET):
+        if v and v not in vues:
+            vues.add(v)
+            candidates.append(v)
+    return candidates
+
+
+def _fernet_pour(secret: str) -> Fernet:
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest()))
+
 
 def _get_fernet() -> Fernet:
-    """Dérive une clé Fernet 32 octets depuis SECRET_KEY."""
-    secret = os.getenv("SECRET_KEY", "changez_cette_cle_secrete_en_production")
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-    return Fernet(key)
+    """Conservé pour compat : Fernet dérivé de la clé primaire."""
+    return _fernet_pour(_cle_primaire())
+
 
 def chiffrer_token(token: str) -> str:
-    return _get_fernet().encrypt(token.encode()).decode()
+    return _fernet_pour(_cle_primaire()).encrypt(token.encode()).decode()
+
 
 def dechiffrer_token(token_enc: str) -> str:
-    return _get_fernet().decrypt(token_enc.encode()).decode()
+    """Essaie chaque clé candidate ; ne lève InvalidToken que si AUCUNE ne convient."""
+    from cryptography.fernet import InvalidToken
+    derniere = None
+    for secret in _cles_candidates():
+        try:
+            return _fernet_pour(secret).decrypt(token_enc.encode()).decode()
+        except Exception as e:
+            derniere = e
+    raise derniere or InvalidToken()
 
 
 # ── OAuth2 Google (Gmail) ─────────────────────────────────────────────
