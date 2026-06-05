@@ -460,13 +460,29 @@ async def gmail_callback(code: str, state: str = "", db: Session = Depends(get_d
 @app.post("/api/email/sync/{avocat_id}")
 async def sync_emails(avocat_id: str, db: Session = Depends(get_db)):
     """Déclenche la synchronisation manuelle des emails d'un avocat."""
+    from cryptography.fernet import InvalidToken
     integration = db.query(EmailIntegration).filter(
         EmailIntegration.avocat_id == avocat_id,
         EmailIntegration.actif == True
     ).first()
     if not integration:
         raise HTTPException(404, "Aucune intégration email active pour cet avocat")
-    await synchroniser_emails_avocat(integration, db)
+    try:
+        await synchroniser_emails_avocat(integration, db)
+    except InvalidToken:
+        # Jeton Gmail chiffré avec une AUTRE SECRET_KEY (ex. local ≠ Render). On renvoie un message
+        # clair (HTTPException → passe par le middleware CORS) plutôt qu'un 500 (faux-« CORS »).
+        raise HTTPException(
+            400,
+            "Jeton Gmail indéchiffrable : la SECRET_KEY de ce serveur diffère de celle utilisée "
+            "lors de la connexion Gmail. Alignez SECRET_KEY (local = Render) puis reconnectez Gmail.",
+        )
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(502, f"Échec de la synchronisation Gmail : {str(e)[:200]}")
     return {"message": "Synchronisation terminée", "derniere_sync": integration.derniere_sync}
 
 
