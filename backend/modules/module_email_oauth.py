@@ -64,12 +64,9 @@ import httpx
 # ── Chiffrement des tokens (AES-256 via Fernet) ───────────────────────
 
 def _get_fernet() -> Fernet:
-    # On utilise FERNET_KEY exclusivement
-    key_str = os.getenv("FERNET_KEY")
-    if not key_str:
-        raise ValueError("FERNET_KEY manquante !")
-    # On dérive une clé 32 octets propre
-    key = base64.urlsafe_b64encode(hashlib.sha256(key_str.encode()).digest())
+    """Dérive une clé Fernet 32 octets depuis SECRET_KEY."""
+    secret = os.getenv("SECRET_KEY", "changez_cette_cle_secrete_en_production")
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
 
 def chiffrer_token(token: str) -> str:
